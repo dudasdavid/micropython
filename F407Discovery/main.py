@@ -1,4 +1,16 @@
-# main.py -- put your code here!
+# *===========================================================================*
+# * Name:       main.py                                                       *
+# * Version:    1.1                                                           *
+# * Created_by: David Dudas - david.dudas@outlook.com                         *
+# * Copyright:  David Dudas - david.dudas@outlook.com                         *
+# *---------------------------------------------------------------------------*
+# * Content:                                                                  *
+# *---------------------------------------------------------------------------*
+# * Language: Python                                                          *
+# * Compiler:                                                                 *
+# * Target:   STM32F407 micropython 1.9.3                                     *
+# *===========================================================================*
+
 import pyb
 import accelerometer
 import filterToolkit
@@ -8,7 +20,7 @@ from pyb import UART
 from pyb import Pin, Timer
 
 uart = UART(2,9600, timeout=10) # UART2 -> Rx PA3, Tx PA2
-acc = accelerometer.STAccel()
+acc = accelerometer.LIS302DL()
 acc.init()
 
 rawX, rawY, rawZ = 0,0,0

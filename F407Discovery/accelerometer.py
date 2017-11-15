@@ -1,19 +1,15 @@
-"""
-Driver for accelerometer on STM32F4 Discover board.
-
-Assumes it's a LIS302DL MEMS device.
-
-Not currently working.
-
-See:
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/Components/lis302dl/lis302dl.h
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/Components/lis302dl/lis302dl.c
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/STM32F4-Discovery/stm32f4_discovery.c
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/STM32F4-Discovery/stm32f4_discovery.h
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/STM32F4-Discovery/stm32f4_discovery_accelerometer.c
-    STM32Cube_FW_F4_V1.1.0/Drivers/BSP/STM32F4-Discovery/stm32f4_discovery_accelerometer.h
-    STM32Cube_FW_F4_V1.1.0/Projects/STM32F4-Discovery/Demonstrations/Src/main.c
-"""
+# *===========================================================================*
+# * Name:       accelerometer.py                                              *
+# * Version:    1.0                                                           *
+# * Created_by: David Dudas - david.dudas@outlook.com                         *
+# * Copyright:  David Dudas - david.dudas@outlook.com                         *
+# *---------------------------------------------------------------------------*
+# * Content: Driver library for LIS302DL                                      *
+# *---------------------------------------------------------------------------*
+# * Language: Python                                                          *
+# * Compiler:                                                                 *
+# * Target:   STM32F407 micropython 1.9.3                                     *
+# *===========================================================================*
 
 from pyb import Pin
 from pyb import SPI
@@ -24,7 +20,7 @@ LIS302DL_WHO_AM_I_ADDR = const(0x0f)
 LIS302DL_CTRL_REG1_ADDR = const(0x20)
 LIS302DL_CTRL_REG2_ADDR = const(0x21)
 
-class STAccel:
+class LIS302DL:
     def __init__(self):
         self.cs_pin = Pin('PE3', Pin.OUT_PP, Pin.PULL_NONE)
         self.cs_pin.high()
