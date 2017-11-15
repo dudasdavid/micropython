@@ -57,12 +57,6 @@ LSM303DLHC_OUT_Z_H_M    = const(0x05)  #/* Output Register Z magnetic field */
 LSM303DLHC_OUT_Z_L_M    = const(0x06)  #/* Output Register Z magnetic field */ 
 LSM303DLHC_OUT_Y_H_M    = const(0x07)  #/* Output Register Y magnetic field */
 LSM303DLHC_OUT_Y_L_M    = const(0x08)  #/* Output Register Y magnetic field */
-
-LSM303DLHC_SR_REG_M     = const(0x09)  #/* Status Register magnetic field */
-LSM303DLHC_IRA_REG_M    = const(0x0A)  #/* IRA Register magnetic field */
-LSM303DLHC_IRB_REG_M    = const(0x0B)  #/* IRB Register magnetic field */
-LSM303DLHC_IRC_REG_M    = const(0x0C)  #/* IRC Register magnetic field */
-
 LSM303DLHC_TEMP_OUT_H_M = const(0x31)  #/* Temperature Register magnetic field */
 LSM303DLHC_TEMP_OUT_L_M = const(0x32)  #/* Temperature Register magnetic field */
 
@@ -71,84 +65,114 @@ def s16(value):
 
 class L3GD20:
     def __init__(self):
-        self.cs_pin = Pin('PE3', Pin.OUT_PP, Pin.PULL_NONE)
-        self.cs_pin.high()
+        self.csPin = Pin('PE3', Pin.OUT_PP, Pin.PULL_NONE)
+        self.csPin.high()
         self.spi = SPI(1, SPI.MASTER, baudrate=328125, polarity=0, phase=1, bits=8)
         
-    def rd(self, addr, nbytes):
+    def read(self, address, nbytes):
         if nbytes > 1:
-            addr |= READWRITE_CMD | MULTIPLEBYTE_CMD
+            address |= READWRITE_CMD | MULTIPLEBYTE_CMD
         else:
-            addr |= READWRITE_CMD
-        self.cs_pin.low()
-        self.spi.send(addr)
+            address |= READWRITE_CMD
+        self.csPin.low()
+        self.spi.send(address)
         buf = self.spi.send_recv(bytearray(nbytes * [0])) # read data, MSB first
-        self.cs_pin.high()
+        self.csPin.high()
         return buf
 
-    def wr(self, addr, buf):
+    def write(self, address, buf):
         if len(buf) > 1:
-            addr |= MULTIPLEBYTE_CMD
-        self.cs_pin.low()
-        self.spi.send(addr)
+            address |= MULTIPLEBYTE_CMD
+        self.csPin.low()
+        self.spi.send(address)
         for b in buf:
             self.spi.send(b)
-        self.cs_pin.high()
+        self.csPin.high()
 
-    def read_id(self):
-        return (self.rd(L3GD20_WHO_AM_I_ADDR, 1)[0])
+    def readID(self):
+        return (self.read(L3GD20_WHO_AM_I_ADDR, 1)[0])
         
-    def init(self, reg1_param = 0x3F, reg2_param = 0x00, reg4_param = 0x10):
-        self.wr(L3GD20_CTRL_REG1_ADDR, bytearray([reg1_param]))
-        self.wr(L3GD20_CTRL_REG2_ADDR, bytearray([reg2_param]))
-        self.wr(L3GD20_CTRL_REG4_ADDR, bytearray([reg4_param]))
+    def initGyro(self, reg1Param = 0x3F, reg2Param = 0x00, reg4Param = 0x10):
+        self.write(L3GD20_CTRL_REG1_ADDR, bytearray([reg1Param]))
+        self.write(L3GD20_CTRL_REG2_ADDR, bytearray([reg2Param]))
+        self.write(L3GD20_CTRL_REG4_ADDR, bytearray([reg4Param]))
 
-    def getx(self):
-        buf = (self.rd(L3GD20_OUT_X_L_ADDR,2))
+    def getXGyro(self):
+        buf = (self.read(L3GD20_OUT_X_L_ADDR,2))
         num = buf[1] << 8 | buf[0]
         return (s16(num)*17.50*0.001)
         
-    def gety(self):
-        buf = (self.rd(L3GD20_OUT_Y_L_ADDR,2))
+    def getYGyro(self):
+        buf = (self.read(L3GD20_OUT_Y_L_ADDR,2))
         num = buf[1] << 8 | buf[0]
         return (s16(num)*17.50*0.001)
         
-    def getz(self):
-        buf = (self.rd(L3GD20_OUT_Z_L_ADDR,2))
+    def getZGyro(self):
+        buf = (self.read(L3GD20_OUT_Z_L_ADDR,2))
         num = buf[1] << 8 | buf[0]
         return (s16(num)*17.50*0.001)
         
-    def gettemp(self):
-        buf = (self.rd(L3GD20_OUT_TEMP_ADDR,1)[0])
+    def getTempGyro(self):
+        buf = (self.read(L3GD20_OUT_TEMP_ADDR,1)[0])
         return s16(buf)
         
 class LSM303DLHC:
     def __init__(self):
         self.i2c = I2C(1, I2C.MASTER, baudrate=100000)
         
-    def init(self, reg1_param = 0x47, reg2_param = 0x90, reg4_param = 0x08):
-        self.i2c.mem_write(bytearray([reg1_param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG1_A)
-        self.i2c.mem_write(bytearray([reg2_param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG2_A)
-        self.i2c.mem_write(bytearray([reg4_param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG4_A)
+    def initAcc(self, reg1Param = 0x47, reg2Param = 0x90, reg4Param = 0x08):
+        self.i2c.mem_write(bytearray([reg1Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG1_A)
+        self.i2c.mem_write(bytearray([reg2Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG2_A)
+        self.i2c.mem_write(bytearray([reg4Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG4_A)
         
-    def read_id(self):
+    def readID(self):
         buf = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_WHO_AM_I_ADDR)
         return buf
         
-    def getx(self):
+    def getXAcc(self):
         bufL = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_X_L_A)
         bufH = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_X_H_A)
         num = bufH[0] << 8 | bufL[0]
         return (s16(num) * 1 / 16.0 * 0.00980665)
     
-    def gety(self):
+    def getYAcc(self):
         bufL = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_Y_L_A)
         bufH = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_Y_H_A)
         num = bufH[0] << 8 | bufL[0]
         return (s16(num) * 1 / 16.0 * 0.00980665)
         
-    def getz(self):
+    def getZAcc(self):
         bufL = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_Z_L_A)
         bufH = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_OUT_Z_H_A)
         num = bufH[0] << 8 | bufL[0]
         return (s16(num) * 1 / 16.0 * 0.00980665)
+        
+    def initMag(self, regAParam = 0x94, regBParam = 0x80, regMParam = 0x00):
+        self.i2c.mem_write(bytearray([regAParam]), MAG_I2C_ADDRESS, LSM303DLHC_CRA_REG_M)
+        self.i2c.mem_write(bytearray([regBParam]), MAG_I2C_ADDRESS, LSM303DLHC_CRB_REG_M)
+        self.i2c.mem_write(bytearray([regMParam]), MAG_I2C_ADDRESS, LSM303DLHC_MR_REG_M)
+        
+    def getXMag(self):
+        bufL = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_X_L_M)
+        bufH = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_X_H_M)
+        num = bufH[0] << 8 | bufL[0]
+        return (s16(num) * 1000 / 450.0)
+        
+    def getYMag(self):
+        bufL = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_Y_L_M)
+        bufH = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_Y_H_M)
+        num = bufH[0] << 8 | bufL[0]
+        return (s16(num) * 1000 / 450.0)
+        
+    def getZMag(self):
+        bufL = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_Z_L_M)
+        bufH = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_OUT_Z_H_M)
+        num = bufH[0] << 8 | bufL[0]
+        return (s16(num) * 1000 / 400.0)
+        
+    def getTempMag(self):    
+        bufL = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_TEMP_OUT_L_M)
+        bufH = self.i2c.mem_read(1, MAG_I2C_ADDRESS, LSM303DLHC_TEMP_OUT_H_M)
+        num = bufH[0] << 8 | bufL[0]
+        return (s16(num) / 8.0 / 8.0)
+        

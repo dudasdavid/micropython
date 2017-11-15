@@ -1,6 +1,6 @@
 # *===========================================================================*
 # * Name:       main.py                                                       *
-# * Version:    0.1                                                           *
+# * Version:    1.0                                                           *
 # * Created_by: David Dudas - david.dudas@outlook.com                         *
 # * Copyright:  David Dudas - david.dudas@outlook.com                         *
 # *---------------------------------------------------------------------------*
@@ -13,23 +13,30 @@
 
 import pyb
 import sensorcore
-# import filterToolkit
+import filterToolkit
 import time
 import math
-from pyb import UART
 from pyb import Pin, Timer
 
-# uart = UART(2,9600, timeout=10) # UART2 -> Rx PA3, Tx PA2
-# acc = accelerometer.STAccel()
-# acc.init()
-gyro = sensorcore.L3GD20()
-gyro.init()
+l3gd20 = sensorcore.L3GD20()
+l3gd20.initGyro()
 
-acc = sensorcore.LSM303DLHC()
-acc.init()
+lsm303dlhc = sensorcore.LSM303DLHC()
+lsm303dlhc.initAcc()
+lsm303dlhc.initMag()
 
-rawX, rawY, rawZ = 0,0,0
-filteredX, filteredY, filteredZ = 0,0,0
+rawXGyro, rawYGyro, rawZGyro = 0,0,0
+rawXAcc,  rawYAcc,  rawZAcc  = 0,0,0
+rawXMag,  rawYMag,  rawZMag  = 0,0,0
+
+filtXGyro, filtYGyro, filtZGyro = 0,0,0
+filtXAcc,  filtYAcc,  filtZAcc  = 0,0,0
+filtXMag,  filtYMag,  filtZMag  = 0,0,0
+
+magXNormFiltered, magYNormFiltered, magZNormFiltered = 0,0,0
+
+initialCompassCalib = 1
+
 PI = 3.14156
 
 ledLeft = Pin('PD12')
@@ -44,17 +51,12 @@ chRight = tim.channel(3,Timer.PWM, pin=ledRight)
 chUp = tim.channel(2,Timer.PWM, pin=ledUp)
 chDown = tim.channel(4,Timer.PWM, pin=ledDown)
 
-cycleCounter = 0;
-cycleCounterPrev = 0;
-
-# uart.write("init complete\r\n")
-
-def calcPitchAndRoll(x,y,z):
-    normAcc = math.sqrt((x*x)+(y*y)+(z*z))
+def calcPitchRollHeading(xAcc,yAcc,zAcc, xMag, yMag, zMag):
+    normAcc = math.sqrt((xAcc*xAcc)+(yAcc*yAcc)+(zAcc*zAcc))
       
-    sinRoll = -y/normAcc
+    sinRoll = -yAcc/normAcc
     cosRoll = math.sqrt(1.0-(sinRoll * sinRoll))
-    sinPitch = x/normAcc
+    sinPitch = xAcc/normAcc
     cosPitch = math.sqrt(1.0-(sinPitch * sinPitch))
       
     if (sinRoll>0):
@@ -84,45 +86,82 @@ def calcPitchAndRoll(x,y,z):
     if (pitch >=360):
         pitch = 360 - pitch
 
-    return roll, pitch
+    magXNormFilteredTilted = xMag*cosPitch+zMag*sinPitch
+    magYNormFilteredTilted = xMag*sinRoll*sinPitch+yMag*cosRoll-zMag*sinRoll*cosPitch
+        
+    heading = (math.atan2(magYNormFilteredTilted,magXNormFilteredTilted)*180)/PI
+    heading += 180
+    
+    if (heading < 0): heading = heading + 360;
+        
+    return roll, pitch, heading
 
 while(1):
-    time.sleep(0.1)
-    cycleCounter+=1
+    time.sleep(0.01)
     
-    rawX = acc.getx()
-    rawY = acc.gety()
-    rawZ = acc.getz()
-    print("x:%.1f y:%.1f z:%.1f\n" % (rawX,rawY,rawZ))
+    rawXGyro = l3gd20.getXGyro()
+    rawYGyro = l3gd20.getYGyro()
+    rawZGyro = l3gd20.getZGyro()
     
-    #filteredX = filterToolkit.filter2(filteredX,rawX,0.2)
-    #filteredY = filterToolkit.filter2(filteredY,rawY,0.2)
-    #filteredZ = filterToolkit.filter2(filteredZ,rawZ,0.2)
-    ## uart.write(" - x:%.1f y:%.1f z:%.1f" % (filteredX,filteredY,filteredZ))
-    #
-    #roll, pitch = calcPitchAndRoll(filteredX,filteredY,filteredZ)
-    ## uart.write("roll:%.1f pitch:%.1f\r\n" % (roll,pitch))
-    #
-    #if (roll >=0):
-    #    chLeft.pulse_width_percent(int(roll/2))
-    #    chRight.pulse_width_percent(0)
-    #else:
-    #    chRight.pulse_width_percent(int(-roll/2))
-    #    chLeft.pulse_width_percent(0)
-    #
-    #if (pitch >=0):
-    #    chDown.pulse_width_percent(int(pitch/2))
-    #    chUp.pulse_width_percent(0)
-    #else:
-    #    chUp.pulse_width_percent(int(-pitch/2))
-    #    chDown.pulse_width_percent(0)
-    #
-    #if (cycleCounter-cycleCounterPrev) >= 100:
-    #    cycleCounterPrev = cycleCounter
-    #    message = uart.readline()
-    #    if message != None:print(message)
-    #    if message == b'roll\n':
-    #        uart.write("%.1f" % roll)
-    #    elif message == b'pitch\n':
-    #        uart.write("%.1f" % pitch)
+    rawXAcc = lsm303dlhc.getXAcc()
+    rawYAcc = lsm303dlhc.getYAcc()
+    rawZAcc = lsm303dlhc.getZAcc()
+    
+    rawXMag = lsm303dlhc.getXMag()
+    rawYMag = lsm303dlhc.getYMag()
+    rawZMag = lsm303dlhc.getZMag()
+    
+    if (initialCompassCalib == 1):
+        magXMax = rawXMag
+        magXMin = rawXMag
+        magYMax = rawYMag
+        magYMin = rawYMag
+        magZMax = rawZMag
+        magZMin = rawZMag
+        initialCompassCalib = 0
+    
+    if (rawXMag > magXMax): magXMax = rawXMag
+    if (rawYMag > magYMax): magYMax = rawYMag
+    if (rawZMag > magZMax): magZMax = rawZMag
+    if (rawXMag < magXMin): magXMin = rawXMag
+    if (rawYMag < magYMin): magYMin = rawYMag
+    if (rawZMag < magZMin): magZMin = rawZMag
+    
+    if (magXMax - magXMin) != 0: magXNorm = (rawXMag - magXMin) / (magXMax - magXMin) * 2 - 1.0
+    else: magXNorm = 0
+    if (magYMax - magYMin) != 0: magYNorm = (rawYMag - magYMin) / (magYMax - magYMin) * 2 - 1.0
+    else: magYNorm = 0
+    if (magZMax - magZMin) != 0: magZNorm = (rawZMag - magZMin) / (magZMax - magZMin) * 2 - 1.0
+    else: magZNorm = 0
+    
+    magXNormFiltered = filterToolkit.filter2(magXNormFiltered, magXNorm, 0.3)
+    magYNormFiltered = filterToolkit.filter2(magYNormFiltered, magYNorm, 0.3)
+    magZNormFiltered = filterToolkit.filter2(magZNormFiltered, magZNorm, 0.3)
+    
+    # print("x:%.1f y:%.1f z:%.1f" % (rawXGyro,rawYGyro,rawZGyro))
+    # print("x:%.1f y:%.1f z:%.1f" % (rawXAcc,rawYAcc,rawZAcc))
+    # print("x:%.1f y:%.1f z:%.1f\n" % (rawXMag,rawYMag,rawZMag))
+    
+    filtXAcc = filterToolkit.filter2(filtXAcc,rawXAcc,0.2)
+    filtYAcc = filterToolkit.filter2(filtYAcc,rawYAcc,0.2)
+    filtZAcc = filterToolkit.filter2(filtZAcc,rawZAcc,0.2)
+    
+    roll, pitch, heading = calcPitchRollHeading(filtXAcc,filtYAcc,filtZAcc,magXNormFiltered,magYNormFiltered,magZNormFiltered)
+    
+    print("roll:%.1f pitch:%.1f heading:%.1f\r\n" % (roll,pitch,heading))
+
+    if (roll >=0):
+        chLeft.pulse_width_percent(int(roll/2))
+        chRight.pulse_width_percent(0)
+    else:
+        chRight.pulse_width_percent(int(-roll/2))
+        chLeft.pulse_width_percent(0)
+    
+    if (pitch >=0):
+        chDown.pulse_width_percent(int(pitch/2))
+        chUp.pulse_width_percent(0)
+    else:
+        chUp.pulse_width_percent(int(-pitch/2))
+        chDown.pulse_width_percent(0)
+    
     
