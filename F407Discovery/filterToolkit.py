@@ -1,3 +1,17 @@
+# *===========================================================================*
+# * Name:       filterToolkit.py                                              *
+# * Version:    1.0                                                           *
+# * Created_by: David Dudas - david.dudas@outlook.com                         *
+# * Copyright:  David Dudas - david.dudas@outlook.com                         *
+# *---------------------------------------------------------------------------*
+# * Content: Filter library                                                   *
+# *---------------------------------------------------------------------------*
+# * Language: Python                                                          *
+# * Compiler:                                                                 *
+# * Target:   STM32F407 micropython 1.9.3                                     *
+# *===========================================================================*
+
+
 def filter2(ylast, x, alpha = 0.2):
     y = (alpha * x) + (1.0 - alpha) * ylast
     return y
