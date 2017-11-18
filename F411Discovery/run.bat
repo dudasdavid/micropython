@@ -1,0 +1,1 @@
+copy C:\GIT\micropython\F411Discovery\*.* e:\

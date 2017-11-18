@@ -176,3 +176,4 @@ class LSM303DLHC:
         num = bufH[0] << 8 | bufL[0]
         return (s16(num) / 8.0 / 8.0)
         
+        

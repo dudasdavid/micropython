@@ -17,6 +17,10 @@ import filterToolkit
 import time
 import math
 from pyb import Pin, Timer
+from pyb import Switch
+
+switch = Switch()
+lastPressTime = time.time()
 
 l3gd20 = sensorcore.L3GD20()
 l3gd20.initGyro()
@@ -35,9 +39,17 @@ filtXMag,  filtYMag,  filtZMag  = 0,0,0
 
 magXNormFiltered, magYNormFiltered, magZNormFiltered = 0,0,0
 
-initialCompassCalib = 1
+magXMax = 557.7
+magXMin = -555.5
+magYMax = 502.2
+magYMin = -631.1
+magZMax = 472.4
+magZMin = -554.9
+initialCompassCalib = 0 # if this is enabled it will not use the above calibration data
 
 PI = 3.14156
+
+ledMode = 0
 
 ledLeft = Pin('PD12')
 ledRight = Pin('PD14')
@@ -54,11 +66,18 @@ chDown = tim.channel(4,Timer.PWM, pin=ledDown)
 def calcPitchRollHeading(xAcc,yAcc,zAcc, xMag, yMag, zMag):
     normAcc = math.sqrt((xAcc*xAcc)+(yAcc*yAcc)+(zAcc*zAcc))
       
-    sinRoll = -yAcc/normAcc
+    sinRoll = yAcc/normAcc
     cosRoll = math.sqrt(1.0-(sinRoll * sinRoll))
-    sinPitch = xAcc/normAcc
+    sinPitch = -xAcc/normAcc
     cosPitch = math.sqrt(1.0-(sinPitch * sinPitch))
-      
+    
+    # //Roll & Pitch Equations
+    # roll_alt  = (math.atan2(yAcc, zAcc)*180.0)/PI
+    # pitch_alt = (math.atan2(-xAcc, math.sqrt(yAcc*yAcc + zAcc*zAcc))*180.0)/PI
+    
+    # print("sinRoll:%.3f cosRoll:%.3f" % (sinRoll,cosRoll))
+    # print("roll:%.3f pitch:%.3f" % (roll_alt,pitch_alt))
+    
     if (sinRoll>0):
       if (cosRoll>0):
         roll = math.acos(cosRoll)*180/PI
@@ -127,6 +146,8 @@ while(1):
     if (rawYMag < magYMin): magYMin = rawYMag
     if (rawZMag < magZMin): magZMin = rawZMag
     
+    # print("xmin:%.1f xmax:%.1f ymin:%.1f ymax:%.1f zmin:%.1f zmax:%.1f" % (magXMin,magXMax,magYMin, magYMax, magZMin, magZMax))
+
     if (magXMax - magXMin) != 0: magXNorm = (rawXMag - magXMin) / (magXMax - magXMin) * 2 - 1.0
     else: magXNorm = 0
     if (magYMax - magYMin) != 0: magYNorm = (rawYMag - magYMin) / (magYMax - magYMin) * 2 - 1.0
@@ -148,20 +169,51 @@ while(1):
     
     roll, pitch, heading = calcPitchRollHeading(filtXAcc,filtYAcc,filtZAcc,magXNormFiltered,magYNormFiltered,magZNormFiltered)
     
-    print("roll:%.1f pitch:%.1f heading:%.1f\r\n" % (roll,pitch,heading))
+    print("roll:%.1f pitch:%.1f heading:%.1f" % (roll,pitch,heading))
 
-    if (roll >=0):
-        chLeft.pulse_width_percent(int(roll/2))
-        chRight.pulse_width_percent(0)
-    else:
-        chRight.pulse_width_percent(int(-roll/2))
-        chLeft.pulse_width_percent(0)
+    if (ledMode == 0):   # compass mode
+        if (heading >=0 and heading <90):
+            chDown.pulse_width_percent((90 - heading)*0.5)
+            chRight.pulse_width_percent((heading)*0.5)
+            chUp.pulse_width_percent(0)
+            chLeft.pulse_width_percent(0)
+        elif (heading >=90 and heading <180):
+            chRight.pulse_width_percent((90 - (heading - 90))*0.5)
+            chUp.pulse_width_percent((heading - 90)*0.5)
+            chDown.pulse_width_percent(0)
+            chLeft.pulse_width_percent(0)
+        elif (heading >=180 and heading <270):
+            chUp.pulse_width_percent((90 - (heading - 180))*0.5)
+            chLeft.pulse_width_percent((heading - 180)*0.5)
+            chDown.pulse_width_percent(0)
+            chRight.pulse_width_percent(0)
+        elif (heading >=270 and heading <360):
+            chLeft.pulse_width_percent((90 - (heading - 270))*0.5)
+            chDown.pulse_width_percent((heading - 270)*0.5)
+            chUp.pulse_width_percent(0)
+            chRight.pulse_width_percent(0)
+        else:
+            print("ivalid heading value: %.1f" % heading)
     
-    if (pitch >=0):
-        chDown.pulse_width_percent(int(pitch/2))
-        chUp.pulse_width_percent(0)
-    else:
-        chUp.pulse_width_percent(int(-pitch/2))
-        chDown.pulse_width_percent(0)
+    elif (ledMode == 1): # pitch roll mode
+        if (roll >= 0):
+            chRight.pulse_width_percent(int(roll/3.0))
+            chLeft.pulse_width_percent(0)
+        else:
+            chLeft.pulse_width_percent(int(-roll/3.0))
+            chRight.pulse_width_percent(0)
+        
+        if (pitch >= 0):
+            chUp.pulse_width_percent(int(pitch/3.0))
+            chDown.pulse_width_percent(0)
+        else:
+            chDown.pulse_width_percent(int(-pitch/3.0))
+            chUp.pulse_width_percent(0)
+    
+    if (switch.value() == True and time.time() > lastPressTime):
+        lastPressTime = time.time()
+        ledMode += 1
+        if (ledMode >= 2):
+            ledMode = 0
     
     
