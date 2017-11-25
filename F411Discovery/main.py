@@ -16,8 +16,7 @@ import sensorcore
 import filterToolkit
 import time
 import math
-from pyb import Pin, Timer
-from pyb import Switch
+from pyb import Pin, Timer, ExtInt, Switch
 
 switch = Switch()
 lastPressTime = time.time()
@@ -27,7 +26,10 @@ l3gd20.initGyro()
 
 lsm303dlhc = sensorcore.LSM303DLHC()
 lsm303dlhc.initAcc()
+lsm303dlhc.initAccInt() # enable click interrupt
 lsm303dlhc.initMag()
+
+roll, pitch, heading = 0,0,0
 
 rawXGyro, rawYGyro, rawZGyro = 0,0,0
 rawXAcc,  rawYAcc,  rawZAcc  = 0,0,0
@@ -63,6 +65,19 @@ chRight = tim.channel(3,Timer.PWM, pin=ledRight)
 chUp = tim.channel(2,Timer.PWM, pin=ledUp)
 chDown = tim.channel(4,Timer.PWM, pin=ledDown)
 
+headingOffset = 0
+originalHeading = 0
+
+def interruptCallback():
+    global headingOffset, originalHeading
+    headingOffset = originalHeading
+    
+    # print(headingOffset)
+    print("Interrupt was received")
+    
+callback = lambda e: interruptCallback()
+ext = ExtInt(Pin('PE4'), ExtInt.IRQ_RISING, Pin.PULL_NONE, callback)
+
 def calcPitchRollHeading(xAcc,yAcc,zAcc, xMag, yMag, zMag):
     normAcc = math.sqrt((xAcc*xAcc)+(yAcc*yAcc)+(zAcc*zAcc))
       
@@ -80,40 +95,44 @@ def calcPitchRollHeading(xAcc,yAcc,zAcc, xMag, yMag, zMag):
     
     if (sinRoll>0):
       if (cosRoll>0):
-        roll = math.acos(cosRoll)*180/PI
+        calcRoll = math.acos(cosRoll)*180/PI
       else:
-        roll = math.acos(cosRoll)*180/PI + 180
+        calcRoll = math.acos(cosRoll)*180/PI + 180
     else:
       if (cosRoll>0):
-        roll = math.acos(cosRoll)*180/PI + 360
+        calcRoll = math.acos(cosRoll)*180/PI + 360
       else:
-        roll = math.acos(cosRoll)*180/PI + 180
+        calcRoll = math.acos(cosRoll)*180/PI + 180
      
     if (sinPitch>0):
       if (cosPitch>0):
-        pitch = math.acos(cosPitch)*180/PI
+        calcPitch = math.acos(cosPitch)*180/PI
       else:
-        pitch = math.acos(cosPitch)*180/PI + 180
+        calcPitch = math.acos(cosPitch)*180/PI + 180
     else:
       if (cosPitch>0):
-        pitch = math.acos(cosPitch)*180/PI + 360
+        calcPitch = math.acos(cosPitch)*180/PI + 360
       else:
-        pitch = math.acos(cosPitch)*180/PI + 180
+        calcPitch = math.acos(cosPitch)*180/PI + 180
 
-    if (roll >=360):
-        roll = 360 - roll
-    if (pitch >=360):
-        pitch = 360 - pitch
+    if (calcRoll >=360):
+        calcRoll = 360 - calcRoll
+    if (calcPitch >=360):
+        calcPitch = 360 - calcPitch
 
     magXNormFilteredTilted = xMag*cosPitch+zMag*sinPitch
     magYNormFilteredTilted = xMag*sinRoll*sinPitch+yMag*cosRoll-zMag*sinRoll*cosPitch
         
-    heading = (math.atan2(magYNormFilteredTilted,magXNormFilteredTilted)*180)/PI
-    heading += 180
+    calcHeading = (math.atan2(magYNormFilteredTilted,magXNormFilteredTilted)*180)/PI
+    calcHeading += 180
     
-    if (heading < 0): heading = heading + 360;
+    global originalHeading, headingOffset
+    originalHeading = calcHeading
+    calcHeading -= headingOffset
         
-    return roll, pitch, heading
+    if (calcHeading < 0): calcHeading = calcHeading + 360;
+        
+    return calcRoll, calcPitch, calcHeading
 
 while(1):
     time.sleep(0.01)

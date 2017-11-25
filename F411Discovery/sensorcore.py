@@ -47,6 +47,16 @@ LSM303DLHC_OUT_Y_H_A       = const(0x2B)  #/* Output Register Y acceleration */
 LSM303DLHC_OUT_Z_L_A       = const(0x2C)  #/* Output Register Z acceleration */
 LSM303DLHC_OUT_Z_H_A       = const(0x2D)  #/* Output Register Z acceleration */ 
 
+LSM303DLHC_CLICK_SRC_A     = const(0x39)  #/* Click source Register acceleration */ 
+LSM303DLHC_CLICK_CFG_A     = const(0x38)  #/* Click config Register acceleration */ 
+LSM303DLHC_CLICK_THS_A     = const(0x3A)  #/* Click config Register acceleration */ 
+LSM303DLHC_TIME_LIMIT_A    = const(0x3B)  #/* Click config Register acceleration */ 
+LSM303DLHC_TIME_LATENCY_A  = const(0x3C)  #/* Click config Register acceleration */ 
+LSM303DLHC_TIME_WINDOW_A   = const(0x3D)  #/* Click config Register acceleration */ 
+LSM303DLHC_CTRL_REG3_A     = const(0x22)  #/* Control register 3 acceleration */
+LSM303DLHC_INT1_THS_A      = const(0x32)  #/* Control register 3 acceleration */
+LSM303DLHC_INT1_DURATION_A = const(0x33)  #/* Control register 3 acceleration */
+
 # /* Magnetic field Registers */
 LSM303DLHC_CRA_REG_M    = const(0x00)  #/* Control register A magnetic field */
 LSM303DLHC_CRB_REG_M    = const(0x01)  #/* Control register B magnetic field */
@@ -120,11 +130,29 @@ class LSM303DLHC:
     def __init__(self):
         self.i2c = I2C(1, I2C.MASTER, baudrate=100000)
         
-    def initAcc(self, reg1Param = 0x47, reg2Param = 0x90, reg4Param = 0x08):
+    def initAcc(self, reg1Param = 0x47, reg2Param = 0x94, reg4Param = 0x08):
         self.i2c.mem_write(bytearray([reg1Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG1_A)
         self.i2c.mem_write(bytearray([reg2Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG2_A)
         self.i2c.mem_write(bytearray([reg4Param]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG4_A)
+    
+    def initAccInt(self, doubleClick = True, singleClick = False):
+        self.i2c.mem_write(bytearray([0x80]), ACC_I2C_ADDRESS, LSM303DLHC_CTRL_REG3_A)
+        if doubleClick == True:
+            self.i2c.mem_write(bytearray([0x20]), ACC_I2C_ADDRESS, LSM303DLHC_CLICK_CFG_A)
+            self.i2c.mem_write(bytearray([0x64]), ACC_I2C_ADDRESS, LSM303DLHC_CLICK_SRC_A)
+        elif singleClick == True:
+            self.i2c.mem_write(bytearray([0x10]), ACC_I2C_ADDRESS, LSM303DLHC_CLICK_CFG_A)
+            self.i2c.mem_write(bytearray([0x54]), ACC_I2C_ADDRESS, LSM303DLHC_CLICK_SRC_A)
         
+        self.i2c.mem_write(bytearray([0x1F]), ACC_I2C_ADDRESS, LSM303DLHC_CLICK_THS_A)
+        self.i2c.mem_write(bytearray([0x46]), ACC_I2C_ADDRESS, LSM303DLHC_TIME_LIMIT_A)
+        self.i2c.mem_write(bytearray([0x40]), ACC_I2C_ADDRESS, LSM303DLHC_TIME_LATENCY_A)
+        self.i2c.mem_write(bytearray([0xFF]), ACC_I2C_ADDRESS, LSM303DLHC_TIME_WINDOW_A)
+        self.i2c.mem_write(bytearray([0x00]), ACC_I2C_ADDRESS, LSM303DLHC_INT1_THS_A)
+        self.i2c.mem_write(bytearray([0x30]), ACC_I2C_ADDRESS, LSM303DLHC_INT1_DURATION_A)
+
+        
+    
     def readID(self):
         buf = self.i2c.mem_read(1, ACC_I2C_ADDRESS, LSM303DLHC_WHO_AM_I_ADDR)
         return buf
