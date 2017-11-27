@@ -16,7 +16,10 @@ import sensorcore
 import filterToolkit
 import time
 import math
-from pyb import Pin, Timer, ExtInt, Switch
+from pyb import Pin, Timer, ExtInt, Switch, UART
+import threading
+
+uart = UART(2,9600, timeout=1000)
 
 switch = Switch()
 lastPressTime = time.time()
@@ -134,105 +137,126 @@ def calcPitchRollHeading(xAcc,yAcc,zAcc, xMag, yMag, zMag):
         
     return calcRoll, calcPitch, calcHeading
 
-while(1):
-    time.sleep(0.01)
-    
-    rawXGyro = l3gd20.getXGyro()
-    rawYGyro = l3gd20.getYGyro()
-    rawZGyro = l3gd20.getZGyro()
-    
-    rawXAcc = lsm303dlhc.getXAcc()
-    rawYAcc = lsm303dlhc.getYAcc()
-    rawZAcc = lsm303dlhc.getZAcc()
-    
-    rawXMag = lsm303dlhc.getXMag()
-    rawYMag = lsm303dlhc.getYMag()
-    rawZMag = lsm303dlhc.getZMag()
-    
-    if (initialCompassCalib == 1):
-        magXMax = rawXMag
-        magXMin = rawXMag
-        magYMax = rawYMag
-        magYMin = rawYMag
-        magZMax = rawZMag
-        magZMin = rawZMag
-        initialCompassCalib = 0
-    
-    if (rawXMag > magXMax): magXMax = rawXMag
-    if (rawYMag > magYMax): magYMax = rawYMag
-    if (rawZMag > magZMax): magZMax = rawZMag
-    if (rawXMag < magXMin): magXMin = rawXMag
-    if (rawYMag < magYMin): magYMin = rawYMag
-    if (rawZMag < magZMin): magZMin = rawZMag
-    
-    # print("xmin:%.1f xmax:%.1f ymin:%.1f ymax:%.1f zmin:%.1f zmax:%.1f" % (magXMin,magXMax,magYMin, magYMax, magZMin, magZMax))
+def task1():
+    global initialCompassCalib, ledMode
+    global magXMax, magYMax, magZMax
+    global magXMin, magYMin, magZMin
+    global magXNormFiltered, magYNormFiltered, magZNormFiltered
+    global filtXAcc, filtYAcc, filtZAcc
 
-    if (magXMax - magXMin) != 0: magXNorm = (rawXMag - magXMin) / (magXMax - magXMin) * 2 - 1.0
-    else: magXNorm = 0
-    if (magYMax - magYMin) != 0: magYNorm = (rawYMag - magYMin) / (magYMax - magYMin) * 2 - 1.0
-    else: magYNorm = 0
-    if (magZMax - magZMin) != 0: magZNorm = (rawZMag - magZMin) / (magZMax - magZMin) * 2 - 1.0
-    else: magZNorm = 0
-    
-    magXNormFiltered = filterToolkit.filter2(magXNormFiltered, magXNorm, 0.3)
-    magYNormFiltered = filterToolkit.filter2(magYNormFiltered, magYNorm, 0.3)
-    magZNormFiltered = filterToolkit.filter2(magZNormFiltered, magZNorm, 0.3)
-    
-    # print("x:%.1f y:%.1f z:%.1f" % (rawXGyro,rawYGyro,rawZGyro))
-    # print("x:%.1f y:%.1f z:%.1f" % (rawXAcc,rawYAcc,rawZAcc))
-    # print("x:%.1f y:%.1f z:%.1f\n" % (rawXMag,rawYMag,rawZMag))
-    
-    filtXAcc = filterToolkit.filter2(filtXAcc,rawXAcc,0.2)
-    filtYAcc = filterToolkit.filter2(filtYAcc,rawYAcc,0.2)
-    filtZAcc = filterToolkit.filter2(filtZAcc,rawZAcc,0.2)
-    
-    roll, pitch, heading = calcPitchRollHeading(filtXAcc,filtYAcc,filtZAcc,magXNormFiltered,magYNormFiltered,magZNormFiltered)
-    
-    print("roll:%.1f pitch:%.1f heading:%.1f" % (roll,pitch,heading))
-
-    if (ledMode == 0):   # compass mode
-        if (heading >=0 and heading <90):
-            chDown.pulse_width_percent((90 - heading)*0.5)
-            chRight.pulse_width_percent((heading)*0.5)
-            chUp.pulse_width_percent(0)
-            chLeft.pulse_width_percent(0)
-        elif (heading >=90 and heading <180):
-            chRight.pulse_width_percent((90 - (heading - 90))*0.5)
-            chUp.pulse_width_percent((heading - 90)*0.5)
-            chDown.pulse_width_percent(0)
-            chLeft.pulse_width_percent(0)
-        elif (heading >=180 and heading <270):
-            chUp.pulse_width_percent((90 - (heading - 180))*0.5)
-            chLeft.pulse_width_percent((heading - 180)*0.5)
-            chDown.pulse_width_percent(0)
-            chRight.pulse_width_percent(0)
-        elif (heading >=270 and heading <360):
-            chLeft.pulse_width_percent((90 - (heading - 270))*0.5)
-            chDown.pulse_width_percent((heading - 270)*0.5)
-            chUp.pulse_width_percent(0)
-            chRight.pulse_width_percent(0)
-        else:
-            print("ivalid heading value: %.1f" % heading)
-    
-    elif (ledMode == 1): # pitch roll mode
-        if (roll >= 0):
-            chRight.pulse_width_percent(int(roll/3.0))
-            chLeft.pulse_width_percent(0)
-        else:
-            chLeft.pulse_width_percent(int(-roll/3.0))
-            chRight.pulse_width_percent(0)
+    while(1):
+        time.sleep(0.01)
         
-        if (pitch >= 0):
-            chUp.pulse_width_percent(int(pitch/3.0))
-            chDown.pulse_width_percent(0)
-        else:
-            chDown.pulse_width_percent(int(-pitch/3.0))
-            chUp.pulse_width_percent(0)
-    
-    if (switch.value() == True and time.time() > lastPressTime):
-        lastPressTime = time.time()
-        ledMode += 1
-        if (ledMode >= 2):
-            ledMode = 0
-    
-    
+        rawXGyro = l3gd20.getXGyro()
+        rawYGyro = l3gd20.getYGyro()
+        rawZGyro = l3gd20.getZGyro()
+        
+        rawXAcc = lsm303dlhc.getXAcc()
+        rawYAcc = lsm303dlhc.getYAcc()
+        rawZAcc = lsm303dlhc.getZAcc()
+        
+        rawXMag = lsm303dlhc.getXMag()
+        rawYMag = lsm303dlhc.getYMag()
+        rawZMag = lsm303dlhc.getZMag()
+        
+        if (initialCompassCalib == 1):
+            magXMax = rawXMag
+            magXMin = rawXMag
+            magYMax = rawYMag
+            magYMin = rawYMag
+            magZMax = rawZMag
+            magZMin = rawZMag
+            initialCompassCalib = 0
+        
+        if (rawXMag > magXMax): magXMax = rawXMag
+        if (rawYMag > magYMax): magYMax = rawYMag
+        if (rawZMag > magZMax): magZMax = rawZMag
+        if (rawXMag < magXMin): magXMin = rawXMag
+        if (rawYMag < magYMin): magYMin = rawYMag
+        if (rawZMag < magZMin): magZMin = rawZMag
+        
+        # print("xmin:%.1f xmax:%.1f ymin:%.1f ymax:%.1f zmin:%.1f zmax:%.1f" % (magXMin,magXMax,magYMin, magYMax, magZMin, magZMax))
+
+        if (magXMax - magXMin) != 0: magXNorm = (rawXMag - magXMin) / (magXMax - magXMin) * 2 - 1.0
+        else: magXNorm = 0
+        if (magYMax - magYMin) != 0: magYNorm = (rawYMag - magYMin) / (magYMax - magYMin) * 2 - 1.0
+        else: magYNorm = 0
+        if (magZMax - magZMin) != 0: magZNorm = (rawZMag - magZMin) / (magZMax - magZMin) * 2 - 1.0
+        else: magZNorm = 0
+        
+        magXNormFiltered = filterToolkit.filter2(magXNormFiltered, magXNorm, 0.3)
+        magYNormFiltered = filterToolkit.filter2(magYNormFiltered, magYNorm, 0.3)
+        magZNormFiltered = filterToolkit.filter2(magZNormFiltered, magZNorm, 0.3)
+        
+        # print("x:%.1f y:%.1f z:%.1f" % (rawXGyro,rawYGyro,rawZGyro))
+        # print("x:%.1f y:%.1f z:%.1f" % (rawXAcc,rawYAcc,rawZAcc))
+        # print("x:%.1f y:%.1f z:%.1f\n" % (rawXMag,rawYMag,rawZMag))
+        
+        filtXAcc = filterToolkit.filter2(filtXAcc,rawXAcc,0.2)
+        filtYAcc = filterToolkit.filter2(filtYAcc,rawYAcc,0.2)
+        filtZAcc = filterToolkit.filter2(filtZAcc,rawZAcc,0.2)
+        
+        roll, pitch, heading = calcPitchRollHeading(filtXAcc,filtYAcc,filtZAcc,magXNormFiltered,magYNormFiltered,magZNormFiltered)
+        
+        print("roll:%.1f pitch:%.1f heading:%.1f" % (roll,pitch,heading))
+
+        if (ledMode == 0):   # compass mode
+            if (heading >=0 and heading <90):
+                chDown.pulse_width_percent((90 - heading)*0.5)
+                chRight.pulse_width_percent((heading)*0.5)
+                chUp.pulse_width_percent(0)
+                chLeft.pulse_width_percent(0)
+            elif (heading >=90 and heading <180):
+                chRight.pulse_width_percent((90 - (heading - 90))*0.5)
+                chUp.pulse_width_percent((heading - 90)*0.5)
+                chDown.pulse_width_percent(0)
+                chLeft.pulse_width_percent(0)
+            elif (heading >=180 and heading <270):
+                chUp.pulse_width_percent((90 - (heading - 180))*0.5)
+                chLeft.pulse_width_percent((heading - 180)*0.5)
+                chDown.pulse_width_percent(0)
+                chRight.pulse_width_percent(0)
+            elif (heading >=270 and heading <360):
+                chLeft.pulse_width_percent((90 - (heading - 270))*0.5)
+                chDown.pulse_width_percent((heading - 270)*0.5)
+                chUp.pulse_width_percent(0)
+                chRight.pulse_width_percent(0)
+            else:
+                print("ivalid heading value: %.1f" % heading)
+        
+        elif (ledMode == 1): # pitch roll mode
+            if (roll >= 0):
+                chRight.pulse_width_percent(int(roll/3.0))
+                chLeft.pulse_width_percent(0)
+            else:
+                chLeft.pulse_width_percent(int(-roll/3.0))
+                chRight.pulse_width_percent(0)
+            
+            if (pitch >= 0):
+                chUp.pulse_width_percent(int(pitch/3.0))
+                chDown.pulse_width_percent(0)
+            else:
+                chDown.pulse_width_percent(int(-pitch/3.0))
+                chUp.pulse_width_percent(0)
+        
+        if (switch.value() == True and time.time() > lastPressTime):
+            lastPressTime = time.time()
+            ledMode += 1
+            if (ledMode >= 2):
+                ledMode = 0
+        
+        
+def task2():
+    while 1:
+        message = uart.readline()
+        if message != None:print(message)
+        
+threads = []
+t = threading.Thread(target=task1)
+threads.append(t)
+t.start()
+
+t = threading.Thread(target=task2)
+threads.append(t)
+t.start()
+        
